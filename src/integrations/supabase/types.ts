@@ -14,7 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      fare_watches: {
+        Row: {
+          created_at: string
+          current_price: number | null
+          destination_city: string
+          destination_code: string
+          id: string
+          is_active: boolean
+          target_price: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_price?: number | null
+          destination_city: string
+          destination_code: string
+          id?: string
+          is_active?: boolean
+          target_price: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_price?: number | null
+          destination_city?: string
+          destination_code?: string
+          id?: string
+          is_active?: boolean
+          target_price?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
