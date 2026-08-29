@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { usePageMeta } from "@/hooks/use-page-meta";
 
 type AuthPageProps = {
@@ -70,16 +69,17 @@ export default function AuthPage({ mode }: AuthPageProps) {
 
   async function handleGoogle() {
     setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/app` },
     });
-    if (result.error) {
+    if (error) {
       setBusy(false);
       toast.error("Google sign-in failed");
       return;
     }
-    if (result.redirected) return;
-    navigate("/app", { replace: true });
+    // On success the browser is redirected to Google, then back to /app —
+    // nothing left to do here.
   }
 
   return (
