@@ -1,42 +1,43 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { usePageMeta } from "@/hooks/use-page-meta";
 
-export const Route = createFileRoute("/auth")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "Sign in — Flight price notifier" },
-      {
-        name: "description",
-        content: "Sign in to manage your San Jose fare watches and target prices.",
-      },
-      { property: "og:title", content: "Sign in — Flight price notifier" },
-      {
-        property: "og:description",
-        content: "Manage your San Jose fare watches and target prices.",
-      },
-    ],
-  }),
-  component: AuthPage,
-});
+type AuthPageProps = {
+  mode: "signin" | "signup";
+};
 
-function AuthPage() {
+export default function AuthPage({ mode }: AuthPageProps) {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
+  usePageMeta(
+    mode === "signin"
+      ? {
+          title: "Sign in — Flight price notifier",
+          description: "Sign in to manage your San Jose fare watches and target prices.",
+          ogTitle: "Sign in — Flight price notifier",
+          ogDescription: "Manage your San Jose fare watches and target prices.",
+        }
+      : {
+          title: "Sign up — Flight price notifier",
+          description: "Create an account to manage your San Jose fare watches and target prices.",
+          ogTitle: "Sign up — Flight price notifier",
+          ogDescription: "Manage your San Jose fare watches and target prices.",
+        },
+  );
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/watches", replace: true });
+      if (data.session) navigate("/app", { replace: true });
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) navigate({ to: "/watches", replace: true });
+      if (session) navigate("/app", { replace: true });
     });
     return () => sub.subscription.unsubscribe();
   }, [navigate]);
@@ -78,7 +79,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    navigate({ to: "/watches", replace: true });
+    navigate("/app", { replace: true });
   }
 
   return (
@@ -148,12 +149,12 @@ function AuthPage() {
           Continue with Google
         </button>
 
-        <button
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+        <Link
+          to={mode === "signin" ? "/sign-up" : "/sign-in"}
           className="mt-6 font-mono text-[11px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-accent"
         >
           {mode === "signin" ? "No account? Sign up" : "Have an account? Sign in"}
-        </button>
+        </Link>
       </main>
     </div>
   );

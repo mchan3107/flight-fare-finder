@@ -1,27 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
-
-export const Route = createFileRoute("/_authenticated/watches")({
-  head: () => ({
-    meta: [
-      { title: "My watches — Flight price notifier" },
-      {
-        name: "description",
-        content: "Track your San Jose routes and target prices in one place.",
-      },
-      { property: "og:title", content: "My watches — Flight price notifier" },
-      {
-        property: "og:description",
-        content: "Track your San Jose routes and target prices in one place.",
-      },
-    ],
-  }),
-  component: WatchesPage,
-});
+import { usePageMeta } from "@/hooks/use-page-meta";
 
 type Watch = {
   id: string;
@@ -34,7 +17,14 @@ type Watch = {
 
 const money = (v: number | null) => (v == null ? "—" : `$${Math.round(Number(v))}`);
 
-function WatchesPage() {
+export default function WatchesPage() {
+  usePageMeta({
+    title: "My watches — Flight price notifier",
+    description: "Track your San Jose routes and target prices in one place.",
+    ogTitle: "My watches — Flight price notifier",
+    ogDescription: "Track your San Jose routes and target prices in one place.",
+  });
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
@@ -95,7 +85,7 @@ function WatchesPage() {
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
+    navigate("/sign-in", { replace: true });
   }
 
   const watches = watchesQuery.data ?? [];
@@ -121,7 +111,10 @@ function WatchesPage() {
         <div className="overflow-hidden rounded-xl ring-1 ring-line">
           <div className="flex h-12 items-center justify-between border-b border-line bg-background px-4">
             <div className="flex items-center gap-4">
-              <Link to="/" className="grid size-6 place-items-center rounded bg-board font-mono text-[10px] font-bold text-board-ink">
+              <Link
+                to="/"
+                className="grid size-6 place-items-center rounded bg-board font-mono text-[10px] font-bold text-board-ink"
+              >
                 SJC
               </Link>
               <span className="text-[13px] font-semibold">My watches</span>
@@ -200,10 +193,14 @@ function WatchesPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
-                  Active <span className="font-mono text-[11px]">{watches.filter((w) => w.is_active).length}</span>
+                  Active{" "}
+                  <span className="font-mono text-[11px]">
+                    {watches.filter((w) => w.is_active).length}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
-                  At target <span className="font-mono text-[11px] text-accent">{atTarget.length}</span>
+                  At target{" "}
+                  <span className="font-mono text-[11px] text-accent">{atTarget.length}</span>
                 </div>
               </nav>
             </aside>

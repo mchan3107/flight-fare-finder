@@ -1,24 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { Link } from "react-router-dom";
 
-export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Flight price notifier — SJC fare alerts under your budget" },
-      {
-        name: "description",
-        content:
-          "Set a route from San Jose and a target price. We watch the cheapest fare all day and email you the moment it drops to or below your number.",
-      },
-      { property: "og:title", content: "Flight price notifier — SJC fare alerts" },
-      {
-        property: "og:description",
-        content:
-          "Set a route and a target price. We email you when the fare drops. Departs San Jose (SJC).",
-      },
-    ],
-  }),
-  component: Landing,
-});
+import { usePageMeta } from "@/hooks/use-page-meta";
 
 const board = [
   { route: "SJC → LAX", price: "$128", from: "▼ from $189", delay: "200ms", hit: false },
@@ -44,7 +26,16 @@ const steps = [
   },
 ];
 
-function Landing() {
+export default function Landing() {
+  usePageMeta({
+    title: "Flight price notifier — SJC fare alerts under your budget",
+    description:
+      "Set a route from San Jose and a target price. We watch the cheapest fare all day and email you the moment it drops to or below your number.",
+    ogTitle: "Flight price notifier — SJC fare alerts",
+    ogDescription:
+      "Set a route and a target price. We email you when the fare drops. Departs San Jose (SJC).",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <header className="sticky top-0 z-50 border-b border-line bg-background/85 backdrop-blur-sm">
@@ -56,14 +47,20 @@ function Landing() {
             <span className="text-[15px] font-bold tracking-tight">Flight price notifier</span>
           </Link>
           <div className="flex items-center gap-3">
-            <a href="#how" className="text-[13px] text-muted-foreground transition-colors hover:text-foreground">
+            <a
+              href="#how"
+              className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+            >
               How it works
             </a>
-            <a href="#routes" className="text-[13px] text-muted-foreground transition-colors hover:text-foreground">
+            <a
+              href="#routes"
+              className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+            >
               Routes
             </a>
             <Link
-              to="/auth"
+              to="/sign-in"
               className="rounded bg-primary px-3.5 py-2 text-[13px] font-medium text-primary-foreground ring-1 ring-black/5 transition-colors hover:bg-board"
             >
               Sign in
@@ -87,7 +84,7 @@ function Landing() {
             </p>
             <div className="animate-rise mt-7 flex flex-wrap items-center gap-3 [animation-delay:180ms]">
               <Link
-                to="/auth"
+                to="/sign-in"
                 className="rounded bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground ring-1 ring-black/5 transition-colors hover:bg-primary hover:text-primary-foreground"
               >
                 Sign in to your watches
