@@ -6,79 +6,99 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { usePageMeta } from "@/hooks/use-page-meta";
 
-type Watch = {
-  id: string;
-  destination_code: string;
-  destination_city: string;
-  target_price: number;
-  current_price: number | null;
-  is_active: boolean;
+// All application data (subscriptions) lives in DynamoDB on AWS, written only by
+// Lambdas behind this API Gateway — Supabase is auth-only in this product.
+const API_BASE = "https://ui1iphgmb4.execute-api.us-east-1.amazonaws.com";
+
+type Plan = {
+  name: "tokyo" | "seoul";
+  label: string;
+  city: string;
+  origin: string;
+  destination: string;
+  route: string;
+  hint: number;
 };
 
-const money = (v: number | null) => (v == null ? "—" : `$${Math.round(Number(v))}`);
+const PLANS: Plan[] = [
+  {
+    name: "tokyo",
+    label: "台北 ✈ 東京",
+    city: "Tokyo",
+    origin: "TPE",
+    destination: "TYO",
+    route: "TPE-TYO",
+    hint: 9325,
+  },
+  {
+    name: "seoul",
+    label: "台北 ✈ 首爾",
+    city: "Seoul",
+    origin: "TPE",
+    destination: "SEL",
+    route: "TPE-SEL",
+    hint: 5989,
+  },
+];
+
+type Subscription = {
+  email: string;
+  route: string;
+  plan_name: string;
+  origin: string;
+  destination: string;
+  target_price: number;
+  currency: string;
+  created_at: string;
+  updated_at: string;
+};
+
+const twd = (v: number | null | undefined) =>
+  v == null ? "—" : `NT$${Math.round(Number(v)).toLocaleString()}`;
 
 export default function WatchesPage() {
   usePageMeta({
     title: "My watches — Flight price notifier",
-    description: "Track your San Jose routes and target prices in one place.",
+    description: "Track your fare alerts and target prices in one place.",
     ogTitle: "My watches — Flight price notifier",
-    ogDescription: "Track your San Jose routes and target prices in one place.",
+    ogDescription: "Track your fare alerts and target prices in one place.",
   });
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [code, setCode] = useState("");
-  const [city, setCity] = useState("");
-  const [target, setTarget] = useState("");
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
+  const [targets, setTargets] = useState<Record<string, string>>({});
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? ""));
   }, []);
 
-  const watchesQuery = useQuery({
-    queryKey: ["fare_watches"],
-    queryFn: async (): Promise<Watch[]> => {
-      const { data, error } = await supabase
-        .from("fare_watches")
-        .select("id,destination_code,destination_city,target_price,current_price,is_active")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as Watch[];
+  const subsQuery = useQuery({
+    queryKey: ["subscriptions", email],
+    queryFn: async (): Promise<Subscription[]> => {
+      const res = await fetch(`${API_BASE}/subscriptions?email=${encodeURIComponent(email)}`);
+      if (!res.ok) throw new Error("Could not load your subscriptions");
+      return (await res.json()) as Subscription[];
     },
+    enabled: Boolean(email),
   });
 
-  const addWatch = useMutation({
-    mutationFn: async () => {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) throw new Error("Not signed in");
-      const { error } = await supabase.from("fare_watches").insert({
-        user_id: userId,
-        destination_code: code.trim().toUpperCase(),
-        destination_city: city.trim(),
-        target_price: Number(target),
+  const subscribe = useMutation({
+    mutationFn: async ({ plan, targetPrice }: { plan: Plan; targetPrice: number }) => {
+      const res = await fetch(`${API_BASE}/subscribe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, plan_name: plan.name, target_price: targetPrice }),
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error("Could not save your target price");
     },
-    onSuccess: () => {
-      setCode("");
-      setCity("");
-      setTarget("");
-      setShowForm(false);
-      queryClient.invalidateQueries({ queryKey: ["fare_watches"] });
-      toast.success("Watch added — we'll email you on a drop.");
+    onSuccess: (_data, { plan }) => {
+      setEditing((e) => ({ ...e, [plan.name]: false }));
+      queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
+      toast.success(`Tracking ${plan.label} — we'll email you when it hits your target.`);
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not add watch"),
-  });
-
-  const removeWatch = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("fare_watches").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["fare_watches"] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Something went wrong"),
   });
 
   async function signOut() {
@@ -88,14 +108,12 @@ export default function WatchesPage() {
     navigate("/sign-in", { replace: true });
   }
 
-  const watches = watchesQuery.data ?? [];
-  const atTarget = watches.filter(
-    (w) => w.current_price != null && Number(w.current_price) <= Number(w.target_price),
-  );
+  const byRoute = new Map((subsQuery.data ?? []).map((s) => [s.route, s]));
+  const subscribedCount = (subsQuery.data ?? []).length;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-7xl px-6 py-10">
+      <div className="mx-auto max-w-5xl px-6 py-10">
         <div className="mb-6 flex items-end justify-between">
           <div>
             <span className="font-mono text-[11px] uppercase tracking-widest text-accent">
@@ -105,7 +123,7 @@ export default function WatchesPage() {
               Your watches, at a glance
             </h1>
           </div>
-          <span className="font-mono text-[11px] text-muted-foreground">Departs SJC</span>
+          <span className="font-mono text-[11px] text-muted-foreground">Departs TPE</span>
         </div>
 
         <div className="overflow-hidden rounded-xl ring-1 ring-line">
@@ -115,12 +133,12 @@ export default function WatchesPage() {
                 to="/"
                 className="grid size-6 place-items-center rounded bg-board font-mono text-[10px] font-bold text-board-ink"
               >
-                SJC
+                TPE
               </Link>
               <span className="text-[13px] font-semibold">My watches</span>
               <span className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:flex">
                 <span className="animate-tick size-1.5 rounded-full bg-accent" /> Watching{" "}
-                {watches.length} route{watches.length === 1 ? "" : "s"}
+                {subscribedCount} route{subscribedCount === 1 ? "" : "s"}
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -134,140 +152,82 @@ export default function WatchesPage() {
             </div>
           </div>
 
-          <div className="grid md:grid-cols-12">
-            <aside className="border-b border-line p-4 md:col-span-3 md:border-b-0 md:border-r">
-              <button
-                onClick={() => setShowForm((v) => !v)}
-                className="w-full rounded bg-primary px-3 py-2 text-left text-[13px] font-semibold text-primary-foreground"
-              >
-                {showForm ? "− Close" : "+ Add watch"}
-              </button>
+          <div className="grid gap-4 p-4 sm:grid-cols-2">
+            {subsQuery.isLoading && (
+              <p className="col-span-2 py-8 text-center font-mono text-[11px] text-muted-foreground">
+                Loading…
+              </p>
+            )}
 
-              {showForm && (
-                <form
-                  className="mt-3 space-y-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    addWatch.mutate();
-                  }}
-                >
-                  <input
-                    required
-                    maxLength={3}
-                    placeholder="Code (LAX)"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className="w-full rounded border border-input bg-card px-2 py-1.5 font-mono text-[13px] uppercase outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <input
-                    required
-                    placeholder="City"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    className="w-full rounded border border-input bg-card px-2 py-1.5 text-[13px] outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <input
-                    required
-                    type="number"
-                    min={1}
-                    placeholder="Target price"
-                    value={target}
-                    onChange={(e) => setTarget(e.target.value)}
-                    className="w-full rounded border border-input bg-card px-2 py-1.5 font-mono text-[13px] outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <button
-                    type="submit"
-                    disabled={addWatch.isPending}
-                    className="w-full rounded bg-accent px-3 py-2 text-[13px] font-semibold text-accent-foreground disabled:opacity-60"
-                  >
-                    Save watch
-                  </button>
-                </form>
-              )}
-
-              <nav className="mt-4 space-y-0.5 text-[13px]">
-                <div className="flex items-center justify-between rounded bg-primary/5 px-3 py-2 font-medium">
-                  All watches{" "}
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {watches.length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
-                  Active{" "}
-                  <span className="font-mono text-[11px]">
-                    {watches.filter((w) => w.is_active).length}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
-                  At target{" "}
-                  <span className="font-mono text-[11px] text-accent">{atTarget.length}</span>
-                </div>
-              </nav>
-            </aside>
-
-            <div className="md:col-span-9">
-              <div className="hidden grid-cols-12 border-b border-line px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground sm:grid">
-                <span className="col-span-4">Route</span>
-                <span className="col-span-2">Target</span>
-                <span className="col-span-3">Cheapest</span>
-                <span className="col-span-3 text-right">Status</span>
-              </div>
-
-              {watchesQuery.isLoading && (
-                <p className="px-4 py-8 font-mono text-[11px] text-muted-foreground">Loading…</p>
-              )}
-
-              {!watchesQuery.isLoading && watches.length === 0 && (
-                <div className="px-4 py-12 text-center">
-                  <p className="font-mono text-[11px] uppercase tracking-widest text-accent">
-                    Empty board
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Add your first route and target price. We'll email you when the fare drops.
-                  </p>
-                </div>
-              )}
-
-              {watches.map((w) => {
-                const hit =
-                  w.current_price != null && Number(w.current_price) <= Number(w.target_price);
+            {!subsQuery.isLoading &&
+              PLANS.map((plan) => {
+                const sub = byRoute.get(plan.route);
+                const isEditing = editing[plan.name] ?? !sub;
                 return (
-                  <div key={w.id} className="border-b border-line px-4 py-3.5 last:border-b-0">
-                    <div className="grid grid-cols-12 items-center text-sm">
-                      <span className="col-span-4 pl-1 font-semibold tracking-wide">
-                        SJC → {w.destination_code}
-                        <span className="ml-2 text-[11px] font-normal text-muted-foreground">
-                          {w.destination_city}
+                  <div key={plan.name} className="rounded-lg border border-line p-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold tracking-wide">{plan.label}</span>
+                      {sub && (
+                        <span className="inline-block rounded bg-accent px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-accent-foreground">
+                          已訂閱 · Subscribed
                         </span>
-                      </span>
-                      <span className="col-span-2 font-mono tabular-nums text-muted-foreground">
-                        {money(w.target_price)}
-                      </span>
-                      <span className="col-span-3 font-mono tabular-nums text-muted-foreground">
-                        {money(w.current_price)}
-                      </span>
-                      <span className="col-span-3 flex items-center justify-end gap-2 pl-1 sm:pl-0">
-                        <span
-                          className={
-                            hit
-                              ? "inline-block rounded bg-accent px-2 py-1 text-[11px] font-semibold tabular-nums text-accent-foreground"
-                              : "inline-block rounded px-2 py-1 text-[11px] font-medium tabular-nums text-muted-foreground"
-                          }
-                        >
-                          {hit ? "At target" : "Watching"}
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Cheapest around {twd(plan.hint)} right now
+                    </p>
+
+                    {sub && !isEditing ? (
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="font-mono text-sm tabular-nums text-muted-foreground">
+                          Target: {twd(sub.target_price)}
                         </span>
                         <button
-                          onClick={() => removeWatch.mutate(w.id)}
-                          className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-destructive"
+                          onClick={() => {
+                            setTargets((t) => ({ ...t, [plan.name]: String(sub.target_price) }));
+                            setEditing((e) => ({ ...e, [plan.name]: true }));
+                          }}
+                          className="font-mono text-[10px] uppercase tracking-widest text-accent hover:underline"
                         >
-                          Del
+                          更新目標價 · Update
                         </button>
-                      </span>
-                    </div>
+                      </div>
+                    ) : (
+                      <form
+                        className="mt-3 flex items-center gap-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          const value = Number(targets[plan.name]);
+                          if (!value || value <= 0) {
+                            toast.error("Enter a valid target price");
+                            return;
+                          }
+                          subscribe.mutate({ plan, targetPrice: value });
+                        }}
+                      >
+                        <input
+                          required
+                          type="number"
+                          min={1}
+                          placeholder={`Target price (${plan.hint})`}
+                          value={targets[plan.name] ?? ""}
+                          onChange={(e) =>
+                            setTargets((t) => ({ ...t, [plan.name]: e.target.value }))
+                          }
+                          className="w-full rounded border border-input bg-card px-2 py-1.5 font-mono text-[13px] outline-none focus:ring-2 focus:ring-ring"
+                        />
+                        <button
+                          type="submit"
+                          disabled={subscribe.isPending}
+                          className="shrink-0 rounded bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-60"
+                        >
+                          {sub ? "Save" : "開始追蹤"}
+                        </button>
+                      </form>
+                    )}
                   </div>
                 );
               })}
-            </div>
           </div>
         </div>
       </div>
