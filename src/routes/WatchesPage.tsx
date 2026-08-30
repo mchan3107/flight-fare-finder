@@ -11,7 +11,7 @@ import { usePageMeta } from "@/hooks/use-page-meta";
 const API_BASE = "https://ui1iphgmb4.execute-api.us-east-1.amazonaws.com";
 
 type Plan = {
-  name: "tokyo" | "seoul";
+  name: "la" | "seattle" | "denver";
   label: string;
   city: string;
   origin: string;
@@ -22,22 +22,31 @@ type Plan = {
 
 const PLANS: Plan[] = [
   {
-    name: "tokyo",
-    label: "台北 ✈ 東京",
-    city: "Tokyo",
-    origin: "TPE",
-    destination: "TYO",
-    route: "TPE-TYO",
-    hint: 9325,
+    name: "la",
+    label: "San Jose ✈ Los Angeles",
+    city: "Los Angeles",
+    origin: "SJC",
+    destination: "LAX",
+    route: "SJC-LAX",
+    hint: 128,
   },
   {
-    name: "seoul",
-    label: "台北 ✈ 首爾",
-    city: "Seoul",
-    origin: "TPE",
-    destination: "SEL",
-    route: "TPE-SEL",
-    hint: 5989,
+    name: "seattle",
+    label: "San Jose ✈ Seattle",
+    city: "Seattle",
+    origin: "SJC",
+    destination: "SEA",
+    route: "SJC-SEA",
+    hint: 199,
+  },
+  {
+    name: "denver",
+    label: "San Jose ✈ Denver",
+    city: "Denver",
+    origin: "SJC",
+    destination: "DEN",
+    route: "SJC-DEN",
+    hint: 342,
   },
 ];
 
@@ -53,8 +62,8 @@ type Subscription = {
   updated_at: string;
 };
 
-const twd = (v: number | null | undefined) =>
-  v == null ? "—" : `NT$${Math.round(Number(v)).toLocaleString()}`;
+const usd = (v: number | null | undefined) =>
+  v == null ? "—" : `$${Math.round(Number(v)).toLocaleString()}`;
 
 export default function WatchesPage() {
   usePageMeta({
@@ -123,7 +132,7 @@ export default function WatchesPage() {
               Your watches, at a glance
             </h1>
           </div>
-          <span className="font-mono text-[11px] text-muted-foreground">Departs TPE</span>
+          <span className="font-mono text-[11px] text-muted-foreground">Departs SJC</span>
         </div>
 
         <div className="overflow-hidden rounded-xl ring-1 ring-line">
@@ -133,7 +142,7 @@ export default function WatchesPage() {
                 to="/"
                 className="grid size-6 place-items-center rounded bg-board font-mono text-[10px] font-bold text-board-ink"
               >
-                TPE
+                SJC
               </Link>
               <span className="text-[13px] font-semibold">My watches</span>
               <span className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:flex">
@@ -152,9 +161,9 @@ export default function WatchesPage() {
             </div>
           </div>
 
-          <div className="grid gap-4 p-4 sm:grid-cols-2">
+          <div className="grid gap-4 p-4 sm:grid-cols-3">
             {subsQuery.isLoading && (
-              <p className="col-span-2 py-8 text-center font-mono text-[11px] text-muted-foreground">
+              <p className="col-span-3 py-8 text-center font-mono text-[11px] text-muted-foreground">
                 Loading…
               </p>
             )}
@@ -169,18 +178,18 @@ export default function WatchesPage() {
                       <span className="text-sm font-semibold tracking-wide">{plan.label}</span>
                       {sub && (
                         <span className="inline-block rounded bg-accent px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-accent-foreground">
-                          已訂閱 · Subscribed
+                          Subscribed
                         </span>
                       )}
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Cheapest around {twd(plan.hint)} right now
+                      Cheapest around {usd(plan.hint)} right now
                     </p>
 
                     {sub && !isEditing ? (
                       <div className="mt-3 flex items-center justify-between">
                         <span className="font-mono text-sm tabular-nums text-muted-foreground">
-                          Target: {twd(sub.target_price)}
+                          Target: {usd(sub.target_price)}
                         </span>
                         <button
                           onClick={() => {
@@ -189,7 +198,7 @@ export default function WatchesPage() {
                           }}
                           className="font-mono text-[10px] uppercase tracking-widest text-accent hover:underline"
                         >
-                          更新目標價 · Update
+                          Update
                         </button>
                       </div>
                     ) : (
@@ -221,7 +230,7 @@ export default function WatchesPage() {
                           disabled={subscribe.isPending}
                           className="shrink-0 rounded bg-primary px-3 py-1.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-60"
                         >
-                          {sub ? "Save" : "開始追蹤"}
+                          {sub ? "Save" : "Track"}
                         </button>
                       </form>
                     )}
